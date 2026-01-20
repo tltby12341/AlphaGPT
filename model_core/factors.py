@@ -14,11 +14,17 @@ class RMSNormFactor(nn.Module):
         return (x / rms) * self.weight
 
 
-class MemeIndicators:
+
+class StockIndicators:
     @staticmethod
-    def liquidity_health(liquidity, fdv):
-        ratio = liquidity / (fdv + 1e-6)
-        return torch.clamp(ratio * 4.0, 0.0, 1.0)
+    def liquidity_health(volume, market_cap):
+        # Turnover rate proxy: Volume / MarketCap (if MarketCap is available/nonzero)
+        # Using a safe division. 
+        # Note: In stock fetcher we might have put 0 for market_cap if data missing.
+        # Let's assume market_cap is roughly available or we use log volume as proxy.
+        turnover = volume / (market_cap + 1e-9)
+        # Clamp turnover to normal range (e.g. 0% to 20%) then scale
+        return torch.clamp(turnover * 100.0, 0.0, 5.0)
 
     @staticmethod
     def buy_sell_imbalance(close, open_, high, low):
@@ -35,7 +41,7 @@ class MemeIndicators:
         return torch.clamp(acc, -5.0, 5.0)
 
     @staticmethod
-    def pump_deviation(close, window=20):
+    def price_deviation(close, window=20):
         pad = torch.zeros((close.shape[0], window-1), device=close.device)
         c_pad = torch.cat([pad, close], dim=1)
         ma = c_pad.unfold(1, window, 1).mean(dim=-1)
@@ -109,21 +115,20 @@ class AdvancedFactorEngineer:
         h = raw_dict['high']
         l = raw_dict['low']
         v = raw_dict['volume']
-        liq = raw_dict['liquidity']
-        fdv = raw_dict['fdv']
+        mcap = raw_dict['market_cap']
         
         # Basic factors
         ret = torch.log(c / (torch.roll(c, 1, dims=1) + 1e-9))
-        liq_score = MemeIndicators.liquidity_health(liq, fdv)
-        pressure = MemeIndicators.buy_sell_imbalance(c, o, h, l)
-        fomo = MemeIndicators.fomo_acceleration(v)
-        dev = MemeIndicators.pump_deviation(c)
+        liq_score = StockIndicators.liquidity_health(v, mcap)
+        pressure = StockIndicators.buy_sell_imbalance(c, o, h, l)
+        fomo = StockIndicators.fomo_acceleration(v)
+        dev = StockIndicators.price_deviation(c)
         log_vol = torch.log1p(v)
         
         # Advanced factors
-        vol_cluster = MemeIndicators.volatility_clustering(c)
-        momentum_rev = MemeIndicators.momentum_reversal(c)
-        rel_strength = MemeIndicators.relative_strength(c, h, l)
+        vol_cluster = StockIndicators.volatility_clustering(c)
+        momentum_rev = StockIndicators.momentum_reversal(c)
+        rel_strength = StockIndicators.relative_strength(c, h, l)
         
         # High-low range
         hl_range = (h - l) / (c + 1e-9)
@@ -163,14 +168,13 @@ class FeatureEngineer:
         h = raw_dict['high']
         l = raw_dict['low']
         v = raw_dict['volume']
-        liq = raw_dict['liquidity']
-        fdv = raw_dict['fdv']
+        mcap = raw_dict['market_cap']
         
         ret = torch.log(c / (torch.roll(c, 1, dims=1) + 1e-9))
-        liq_score = MemeIndicators.liquidity_health(liq, fdv)
-        pressure = MemeIndicators.buy_sell_imbalance(c, o, h, l)
-        fomo = MemeIndicators.fomo_acceleration(v)
-        dev = MemeIndicators.pump_deviation(c)
+        liq_score = StockIndicators.liquidity_health(v, mcap)
+        pressure = StockIndicators.buy_sell_imbalance(c, o, h, l)
+        fomo = StockIndicators.fomo_acceleration(v)
+        dev = StockIndicators.price_deviation(c)
         log_vol = torch.log1p(v)
         
         def robust_norm(t):

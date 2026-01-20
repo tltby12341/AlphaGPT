@@ -1,39 +1,49 @@
 from .config import StrategyConfig
-from execution.jupiter import JupiterAggregator # 复用 Jupiter 做模拟
 from loguru import logger
+from datetime import datetime, time as dtime
+import pytz
 
 class RiskEngine:
     def __init__(self):
         self.config = StrategyConfig()
-        self.jup = JupiterAggregator()
+        # US Eastern Time for market hours
+        self.market_tz = pytz.timezone('US/Eastern')
 
-    async def check_safety(self, token_address, liquidity_usd):
-        if liquidity_usd < 5000:
-            logger.warning(f"[x] Risk: Liquidity too low (${liquidity_usd})")
+    async def check_safety(self, ticker, liquidity_usd):
+        # 1. Check Market Hours (9:30 AM - 4:00 PM ET)
+        if not self._is_market_open():
+            # Allow scan, but maybe warn? Or just return True if we want to trade pre-market?
+            # Let's enforce market hours for safety.
+            logger.warning(f"Risk: Market closed. Current EST time: {datetime.now(self.market_tz)}")
             return False
 
-        try:
-            quote = await self.jup.get_quote(
-                input_mint=token_address,
-                output_mint="So11111111111111111111111111111111111111112",
-                amount_integer=1000000,
-                slippage_bps=1000
-            )
-            if not quote:
-                logger.warning(f"[x] Risk: Cannot verify sell path (Honeypot?)")
-                return False
-        except Exception:
+        # 2. Check Liquidity (Market Cap proxy check already done via DB filter mostly)
+        # But we can check dynamic liquidity if passed
+        if liquidity_usd < 1000000: # $1M Daily Volume minimum
+            logger.warning(f"Risk: Low liquidity proxy ({liquidity_usd}) for {ticker}")
             return False
-            
+
         return True
 
-    def calculate_position_size(self, wallet_balance_sol):
-        size = self.config.ENTRY_AMOUNT_SOL
+    def _is_market_open(self):
+        now = datetime.now(self.market_tz)
+        # Weekends
+        if now.weekday() >= 5: return False
         
-        if wallet_balance_sol < size + 0.1:
+        market_start = dtime(9, 30)
+        market_end = dtime(16, 0)
+        return market_start <= now.time() <= market_end
+
+    def calculate_position_size(self, wallet_balance_usd):
+        # Fixed amount or percentage
+        # Let's use config.ENTRY_AMOUNT_SOL as USD amount
+        # Assumption: Config variable reused as USD
+        size = 2000.0 # Default fixed size $2000 per trade
+        
+        if wallet_balance_usd < size:
             return 0.0
             
         return size
 
     async def close(self):
-        await self.jup.close()
+        pass

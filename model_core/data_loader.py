@@ -14,22 +14,22 @@ class CryptoDataLoader:
     def load_data(self, limit_tokens=500):
         print("Loading data from SQL...")
         top_query = f"""
-        SELECT address FROM tokens 
+        SELECT ticker FROM tokens 
         LIMIT {limit_tokens} 
         """
-        addrs = pd.read_sql(top_query, self.engine)['address'].tolist()
+        addrs = pd.read_sql(top_query, self.engine)['ticker'].tolist()
         if not addrs: raise ValueError("No tokens found.")
         addr_str = "'" + "','".join(addrs) + "'"
         data_query = f"""
-        SELECT time, address, open, high, low, close, volume, liquidity, fdv
+        SELECT time, ticker, open, high, low, close, volume, market_cap
         FROM ohlcv
-        WHERE address IN ({addr_str})
+        WHERE ticker IN ({addr_str})
         ORDER BY time ASC
         """
         df = pd.read_sql(data_query, self.engine)
         def to_tensor(col):
-            pivot = df.pivot(index='time', columns='address', values=col)
-            pivot = pivot.fillna(method='ffill').fillna(0.0)
+            pivot = df.pivot(index='time', columns='ticker', values=col)
+            pivot = pivot.ffill().fillna(0.0)
             return torch.tensor(pivot.values.T, dtype=torch.float32, device=ModelConfig.DEVICE)
         self.raw_data_cache = {
             'open': to_tensor('open'),
@@ -37,8 +37,7 @@ class CryptoDataLoader:
             'low': to_tensor('low'),
             'close': to_tensor('close'),
             'volume': to_tensor('volume'),
-            'liquidity': to_tensor('liquidity'),
-            'fdv': to_tensor('fdv')
+            'market_cap': to_tensor('market_cap')
         }
         self.feat_tensor = FeatureEngineer.compute_features(self.raw_data_cache)
         op = self.raw_data_cache['open']

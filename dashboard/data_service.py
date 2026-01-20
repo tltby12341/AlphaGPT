@@ -3,54 +3,69 @@ import os
 import pandas as pd
 import sqlalchemy
 from dotenv import load_dotenv
-from solders.pubkey import Pubkey
-from solana.rpc.api import Client
 
 load_dotenv()
 
 class DashboardService:
     def __init__(self):
-        db_user = os.getenv("DB_USER", "postgres")
-        db_pass = os.getenv("DB_PASSWORD", "password")
-        db_host = os.getenv("DB_HOST", "localhost")
-        db_name = os.getenv("DB_NAME", "crypto_quant")
-        self.engine = sqlalchemy.create_engine(f"postgresql://{db_user}:{db_pass}@{db_host}:5432/{db_name}")
-        rpc_url = os.getenv("QUICKNODE_RPC_URL", "https://api.mainnet-beta.solana.com")
-        self.rpc = Client(rpc_url)
-        self.wallet_addr = self._get_wallet_address()
-
-    def _get_wallet_address(self):
-        try:
-            from solders.keypair import Keypair
-            pk_str = os.getenv("SOLANA_PRIVATE_KEY", "")
-            if "[" in pk_str:
-                kp = Keypair.from_bytes(json.loads(pk_str))
-            else:
-                kp = Keypair.from_base58_string(pk_str)
-            return str(kp.pubkey())
-        except:
-            return "Unknown"
+        # Use SQLite for reading data (shared with pipeline)
+        self.db_path = "stock_quant.db"
+        self.engine = sqlalchemy.create_engine(f"sqlite:///{self.db_path}")
+        self.state_file = "paper_trading_state.json"
 
     def get_wallet_balance(self):
         try:
-            resp = self.rpc.get_balance(Pubkey.from_string(self.wallet_addr))
-            return resp.value / 1e9
-        except Exception as e:
+            with open(self.state_file, "r") as f:
+                data = json.load(f)
+                return data.get("balance", 0.0)
+        except Exception:
             return 0.0
 
     def load_portfolio(self):
         try:
-            with open("portfolio_state.json", "r") as f:
+            with open(self.state_file, "r") as f:
                 data = json.load(f)
-                if not data: return pd.DataFrame()
+                positions = data.get("positions", {})
+                if not positions: return pd.DataFrame()
                 
-                df = pd.DataFrame(data.values())
-                # 计算当前预估 PnL
-                if 'highest_price' in df.columns and 'entry_price' in df.columns:
-                    df['pnl_pct'] = (df['highest_price'] - df['entry_price']) / df['entry_price']
-                return df
+                # Convert positions dict {ticker: units} to DataFrame
+                # We need current price to calc value.
+                # Ideally fetch latest price from DB.
+                
+                df_list = []
+                for ticker, units in positions.items():
+                    # Get latest close from DB
+                    try:
+                        price = self._get_latest_price(ticker)
+                    except:
+                        price = 0.0
+                        
+                    # We don't track entry price in simple paper trader state yet
+                    # So PnL might be tricky without trade history replay.
+                    # For MVP, we show current Value.
+                    
+                    df_list.append({
+                        "symbol": ticker,
+                        "amount_held": units,
+                        "current_price": price,
+                        "market_value": units * price,
+                        "entry_price": 0.0, # Placeholder
+                        "pnl_pct": 0.0 # Placeholder
+                    })
+                
+                return pd.DataFrame(df_list)
         except FileNotFoundError:
             return pd.DataFrame()
+
+    def _get_latest_price(self, ticker):
+        query = f"SELECT close FROM ohlcv WHERE ticker='{ticker}' ORDER BY time DESC LIMIT 1"
+        try:
+            df = pd.read_sql(query, self.engine)
+            if not df.empty:
+                return df.iloc[0]['close']
+        except:
+            pass
+        return 0.0
 
     def load_strategy_info(self):
         try:
@@ -60,20 +75,28 @@ class DashboardService:
             return {"formula": "Not Trained Yet"}
 
     def get_market_overview(self, limit=50):
-        query = f"""
-        SELECT t.symbol, o.address, o.close, o.volume, o.liquidity, o.fdv, o.time
+        # Get latest snapshot for all tickers
+        # SQLite dialect
+        query = """
+        SELECT t.symbol, o.ticker, o.close, o.volume, o.market_cap, o.time
         FROM ohlcv o
-        JOIN tokens t ON o.address = t.address
+        JOIN tokens t ON o.ticker = t.ticker
         WHERE o.time = (SELECT MAX(time) FROM ohlcv)
-        ORDER BY o.liquidity DESC
-        LIMIT {limit}
+        ORDER BY o.market_cap DESC
+        LIMIT 50
         """
         try:
             return pd.read_sql(query, self.engine)
-        except:
+        except Exception as e:
+            print(f"Market view error: {e}")
             return pd.DataFrame()
     
     def get_recent_logs(self, n=50):
+        # We were logging to stderr/stdout mostly with Loguru
+        # Unless we configured a file sink.
+        # Let's check where loguru logs to.
+        # If no file sink, this might be empty.
+        # Assuming strategy.log exists or we add it.
         log_file = "strategy.log"
         if not os.path.exists(log_file): return []
         

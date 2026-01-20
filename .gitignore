@@ -56,3 +56,9 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
+
+# AlphaGPT Local Data
+stock_quant.db
+.pids/
+paper_trading_state.json
+best_meme_strategy.json

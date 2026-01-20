@@ -1,0 +1,13 @@
+{
+    "US_STOCKS_TICKERS": [
+        "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "TSLA", "META", "BRK-B", "UNH", "JNJ",
+        "JPM", "XOM", "V", "PG", "MA", "HD", "CVX", "ABBV", "PEP", "MRK",
+        "KO", "LLY", "BAC", "AVGO", "COST", "MCD", "TMO", "CSCO", "ACN", "WMT"
+    ],
+    "TIMEFRAME": "1d",
+    "HISTORY_DAYS": 730,
+    "TRAIN_STEPS": 50,
+    "BATCH_SIZE": 32,
+    "TRADE_ENABLED": true,
+    "BUY_THRESHOLD": 0.1
+}
