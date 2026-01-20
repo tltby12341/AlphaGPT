@@ -1,4 +1,5 @@
 import streamlit as st
+import sys
 import pandas as pd
 import time
 import json
@@ -141,13 +142,17 @@ with tab4:
 
     c1, c2, c3 = st.columns(3)
 
+import sys
+
+# ... inside tab4 ...
+
     with c1:
         st.write("#### 1. 数据更新 (Pipeline)")
         status = ctl.get_status("data_pipeline")
         st.write(f"状态: **{status}**")
         if status == "Stopped":
             if st.button("启动数据下载", key="btn_start_data"):
-                ctl.run_process("data_pipeline", ".venv/bin/python -m data_pipeline.run_pipeline")
+                ctl.run_process("data_pipeline", f"{sys.executable} -m data_pipeline.run_pipeline")
                 st.rerun()
         else:
             if st.button("停止下载", key="btn_stop_data"):
@@ -163,7 +168,7 @@ with tab4:
         st.write(f"状态: **{status}**")
         if status == "Stopped":
             if st.button("开始模型训练", key="btn_start_train"):
-                ctl.run_process("model_training", ".venv/bin/python -m model_core.engine")
+                ctl.run_process("model_training", f"{sys.executable} -m model_core.engine")
                 st.rerun()
         else:
             if st.button("停止训练", key="btn_stop_train"):
@@ -179,7 +184,7 @@ with tab4:
         st.write(f"状态: **{status}**")
         if status == "Stopped":
             if st.button("启动交易机器人", key="btn_start_trade"):
-                ctl.run_process("trading_runner", ".venv/bin/python -m strategy_manager.runner")
+                ctl.run_process("trading_runner", f"{sys.executable} -m strategy_manager.runner")
                 st.rerun()
         else:
             if st.button("停止机器人", key="btn_stop_trade"):
