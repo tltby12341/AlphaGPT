@@ -142,9 +142,6 @@ with tab4:
 
     c1, c2, c3 = st.columns(3)
 
-import sys
-
-# ... inside tab4 ...
 
     with c1:
         st.write("#### 1. 数据更新 (Pipeline)")
