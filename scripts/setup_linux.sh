@@ -17,9 +17,27 @@ else
     SUDO=""
 fi
 
-# 2. Update System
-echo "[1/5] Updating system packages..."
-$SUDO apt-get update && $SUDO apt-get install -y python3 python3-venv python3-pip git htop
+# 2. Detect Package Manager and Update System
+echo "[1/5] Detecting OS and updating system packages..."
+
+if command -v apt-get >/dev/null 2>&1; then
+    PKG_MGR="apt-get"
+    $SUDO $PKG_MGR update
+    $SUDO $PKG_MGR install -y python3 python3-venv python3-pip git htop
+elif command -v dnf >/dev/null 2>&1; then
+    PKG_MGR="dnf"
+    $SUDO $PKG_MGR check-update
+    $SUDO $PKG_MGR install -y python3 python3-pip git htop
+elif command -v yum >/dev/null 2>&1; then
+    PKG_MGR="yum"
+    $SUDO $PKG_MGR check-update
+    $SUDO $PKG_MGR install -y python3 python3-pip git htop
+else
+    echo "Error: Unsupported package manager. Please install dependencies manually."
+    exit 1
+fi
+
+echo "Using package manager: $PKG_MGR"
 
 # 3. Check Python Version (Must be >= 3.10)
 echo "[2/5] Verifying Python version..."
