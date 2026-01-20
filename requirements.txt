@@ -15,28 +15,9 @@
 torch>=2.0.0          
 numpy>=1.24.0         
 
-# Data Processing & Database
-pandas>=2.0.0         
-sqlalchemy>=2.0.0     
-asyncpg>=0.28.0       
+# Database (SQLite)
+aiosqlite>=0.19.0
 
-# Async HTTP
-aiohttp>=3.9.0        
-
-# Environment & Configuration
-python-dotenv>=1.0.0  
-
-# Logging & Progress
-loguru>=0.7.0         
-tqdm>=4.66.0          
-
-# US Stock Data
-yfinance>=0.2.30
-
-# Dashboard & Visualization
-streamlit>=1.28.0     
-plotly>=5.17.0        
-
-# PostgreSQL
-psycopg2-binary>=2.9.10
+# Process Management
+psutil>=5.9.0
 
