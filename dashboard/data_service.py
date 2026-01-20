@@ -75,6 +75,11 @@ class DashboardService:
             return {"formula": "Not Trained Yet"}
 
     def get_market_overview(self, limit=50):
+        # Check if table exists first to avoid noisy errors on fresh install
+        ins = sqlalchemy.inspect(self.engine)
+        if not ins.has_table("ohlcv"):
+            return pd.DataFrame()
+
         # Get latest snapshot for all tickers
         # SQLite dialect
         query = """
